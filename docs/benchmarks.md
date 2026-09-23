@@ -24,16 +24,18 @@ The benchmark reuses one backend instance and prepares proof programs before mea
 
 All workloads must return `Verified`; an unexpected `Failed` or operational error fails the benchmark. These workloads use small bounded integer properties to make solver and backend overhead visible; add domain-specific formulas before using the numbers for a complex application. The independent runs execute sequentially because one backend instance serializes solver checks. The benchmark does not report a universal performance threshold because solver performance depends on the host and the encoded formula.
 
-## Reference run
+## Reference runs
 
-These numbers came from one `pnpm benchmark` run on an Apple M2 Pro Mac, macOS 25.6.0, Node.js 26.5.1, pnpm 11.18.0, Vitest 4.1.4, and the pinned Z3 solver. The benchmark intentionally uses one sample and no warmup, so this is a smoke-scale reference, not a stable performance guarantee.
+Both tables below use one warmup-free sample per workload. They are smoke-scale references, not stable performance guarantees. The latest run includes batched assertion checks; the machine had the same CPU and Node version as the previous run, but a different macOS version, so treat the comparison as directional.
 
-| Workload                        | Mean wall time | Batch throughput |
-| ------------------------------- | -------------: | ---------------: |
-| `1,000 assertions in one proof` |    1,484.10 ms |   0.67 batches/s |
-| `2,000 assertions in one proof` |    2,651.92 ms |   0.38 batches/s |
-| `1,000 independent proof runs`  |    7,259.45 ms |   0.14 batches/s |
+| Workload                        | Previous reference |  Latest run | Latest throughput |
+| ------------------------------- | -----------------: | ----------: | ----------------: |
+| `1,000 assertions in one proof` |        1,484.10 ms |   154.98 ms |    6.45 batches/s |
+| `2,000 assertions in one proof` |        2,651.92 ms |   120.25 ms |    8.32 batches/s |
+| `1,000 independent proof runs`  |        7,259.45 ms | 6,103.31 ms |    0.16 batches/s |
 
-The independent workload is slower per proof than a single 1,000-assertion proof because each proof creates its own solver check. Compare results only on the same host and with the same benchmark configuration. Run the benchmark again on the target machine before using these numbers for capacity planning.
+The previous reference was recorded on an Apple M2 Pro Mac running macOS 25.6.0. The latest run was recorded on the same model with macOS 26.6.2. Both used Node.js 26.5.1, pnpm 11.18.0, Vitest 4.1.4, and the pinned Z3 solver.
+
+The latest 1,000- and 2,000-assertion workloads use the batched fast path when all assertions pass. The independent-proof workload does not, and still pays for a solver check per proof. In this run, the 2,000-assertion result was faster than the 1,000-assertion result. Since each workload runs once, in order, don't read these measurements as a scaling curve. Repeat the benchmark under stable conditions before using the numbers for capacity planning.
 
 For a normal run, use `pnpm test`. For a focused benchmark file, run `pnpm exec vitest bench benchmarks/verification.bench.ts` after `pnpm build`.
