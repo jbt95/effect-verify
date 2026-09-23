@@ -42,6 +42,8 @@ const isFailedAssertion = (outcome: AssertionOutcome): outcome is FailedAssertio
 const isVerifiedAssertion = (outcome: AssertionOutcome): outcome is VerifiedAssertion =>
   outcome.kind === "AssertionVerified";
 
+const assertionBatchSize = 64;
+
 const errorMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
@@ -188,13 +190,7 @@ class Z3BackendImpl implements Z3Backend {
 
     await this.checkAssumptions(program, context, solver, values);
 
-    const outcomes: Array<AssertionOutcome> = [];
-
-    for (const assertion of program.assertions) {
-      outcomes.push(
-        await this.checkAssertion(program, assertion, context, solver, values, variableNames),
-      );
-    }
+    const outcomes = await this.checkAssertions(program, context, solver, values, variableNames);
 
     const failed = outcomes.filter(isFailedAssertion);
 
@@ -216,6 +212,95 @@ class Z3BackendImpl implements Z3Backend {
       proof: program.proof,
       assertions: Object.freeze(outcomes.filter(isVerifiedAssertion)),
     });
+  }
+
+  private async checkAssertions<Name extends string>(
+    program: VerificationProgram,
+    context: Context<Name>,
+    solver: Solver<Name>,
+    values: ReadonlyMap<number, Z3Value<Name>>,
+    variableNames: ReadonlyMap<number, string>,
+  ): Promise<Array<AssertionOutcome>> {
+    const outcomes: Array<AssertionOutcome> = [];
+
+    for (let offset = 0; offset < program.assertions.length; offset += assertionBatchSize) {
+      const assertions = program.assertions.slice(offset, offset + assertionBatchSize);
+
+      if (assertions.length === 1) {
+        const assertion = assertions[0];
+
+        if (assertion === undefined) throw new Error("Missing assertion in batch");
+        outcomes.push(
+          await this.checkAssertion(program, assertion, context, solver, values, variableNames),
+        );
+        continue;
+      }
+
+      outcomes.push(
+        ...(await this.checkAssertionBatch(
+          program,
+          assertions,
+          context,
+          solver,
+          values,
+          variableNames,
+        )),
+      );
+    }
+
+    return outcomes;
+  }
+
+  private async checkAssertionBatch<Name extends string>(
+    program: VerificationProgram,
+    assertions: ReadonlyArray<VerificationProgram["assertions"][number]>,
+    context: Context<Name>,
+    solver: Solver<Name>,
+    values: ReadonlyMap<number, Z3Value<Name>>,
+    variableNames: ReadonlyMap<number, string>,
+  ): Promise<Array<AssertionOutcome>> {
+    const counterexamples: Array<Bool<Name>> = [];
+
+    for (const assertion of assertions) {
+      await this.checkAssertionDivisors(assertion, context, solver, values);
+      counterexamples.push(context.Not(this.compileBool(context, assertion.expression, values)));
+    }
+
+    solver.push();
+    let status: Awaited<ReturnType<Solver<Name>["check"]>>;
+
+    try {
+      solver.add(context.Or(...counterexamples));
+      status = await solver.check();
+    } finally {
+      solver.pop();
+    }
+
+    if (status === "unsat") {
+      const outcomes: Array<AssertionOutcome> = [];
+
+      for (const assertion of assertions) {
+        outcomes.push(
+          Object.freeze({
+            kind: "AssertionVerified",
+            label: assertion.label,
+            expression: this.format(variableNames, assertion.expression),
+          }),
+        );
+      }
+
+      return outcomes;
+    }
+
+    const outcomes: Array<AssertionOutcome> = [];
+
+    for (const assertion of assertions) {
+      outcomes.push(
+        await this.checkAssertionResult(program, assertion, context, solver, values, variableNames),
+      );
+    }
+
+    return outcomes;
   }
 
   private registerVariables<Name extends string>(
@@ -377,6 +462,18 @@ class Z3BackendImpl implements Z3Backend {
     variableNames: ReadonlyMap<number, string>,
   ): Promise<AssertionOutcome> {
     await this.checkAssertionDivisors(assertion, context, solver, values);
+
+    return this.checkAssertionResult(program, assertion, context, solver, values, variableNames);
+  }
+
+  private async checkAssertionResult<Name extends string>(
+    program: VerificationProgram,
+    assertion: VerificationProgram["assertions"][number],
+    context: Context<Name>,
+    solver: Solver<Name>,
+    values: ReadonlyMap<number, Z3Value<Name>>,
+    variableNames: ReadonlyMap<number, string>,
+  ): Promise<AssertionOutcome> {
     solver.push();
 
     try {

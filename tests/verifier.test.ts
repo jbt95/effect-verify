@@ -18,6 +18,63 @@ afterAll(async () => {
 const check = <E>(proof: Proof<E>) => Effect.runPromise(verifyProof(proof, backend));
 
 describe("typed symbolic verification", () => {
+  it("preserves results for batches of passing assertions", async () => {
+    const proof = Verify.proof(
+      "passing-assertion-batch",
+      Effect.gen(function* () {
+        const value = yield* Verify.any(Verify.uint({ bits: 8 }), { name: "value" });
+
+        for (let index = 0; index < 130; index += 1) {
+          yield* Verify.assert(
+            Sym.lte(value, Sym.literal(1_000 + index)),
+            `bounded value ${index}`,
+          );
+        }
+      }),
+    );
+
+    const result = await check(proof);
+    expect(result.kind).toBe("Verified");
+
+    if (result.kind !== "Verified") throw new Error("Expected all assertions to be verified");
+
+    expect(result.assertions.map(({ label }) => label)).toEqual(
+      Array.from({ length: 130 }, (_, index) => `bounded value ${index}`),
+    );
+  });
+
+  it("preserves individual failures in batches of assertions", async () => {
+    const failingIndexes = new Set([0, 64, 129]);
+
+    const proof = Verify.proof(
+      "mixed-assertion-batch",
+      Effect.gen(function* () {
+        const value = yield* Verify.any(Verify.uint({ bits: 8 }), { name: "value" });
+
+        for (let index = 0; index < 130; index += 1) {
+          yield* Verify.assert(
+            failingIndexes.has(index)
+              ? Sym.lt(value, Sym.literal(100))
+              : Sym.lte(value, Sym.literal(1_000 + index)),
+            `assertion ${index}`,
+          );
+        }
+      }),
+    );
+
+    const result = await check(proof);
+    expect(result.kind).toBe("Failed");
+
+    if (result.kind !== "Failed") throw new Error("Expected individual assertion failures");
+
+    expect(result.assertions.map(({ label }) => label)).toEqual(
+      Array.from({ length: 130 }, (_, index) => `assertion ${index}`),
+    );
+    expect(result.failures.map(({ assertion }) => assertion)).toEqual(
+      [...failingIndexes].map((index) => `assertion ${index}`),
+    );
+  });
+
   it("compiles bounded inputs and proves their inclusive upper bound", async () => {
     const proof = Verify.proof(
       "uint8-bounds",
@@ -296,6 +353,7 @@ describe("typed symbolic verification", () => {
         const value = yield* Verify.any(Verify.integer(), { name: "value" });
         yield* Verify.assume(Sym.neq(value, Sym.literal(0)));
         yield* Verify.assert(Sym.eq(Sym.div(value, value), Sym.literal(1)));
+        yield* Verify.assert(Sym.eq(value, value));
       }),
     );
 
