@@ -966,6 +966,19 @@ const compileFunctionBody = (
   return result;
 };
 
+const sourceFileFrom = (program: ts.Program, absolutePath: string): ts.SourceFile => {
+  const sourceFile = program.getSourceFile(absolutePath);
+
+  if (sourceFile === undefined)
+    throw new SourceCompileError(`cannot read or parse source file ${absolutePath}`);
+
+  const diagnostic = program.getSyntacticDiagnostics(sourceFile)[0];
+
+  if (diagnostic !== undefined) throw new SourceCompileError(diagnosticMessage(diagnostic));
+
+  return sourceFile;
+};
+
 const loadSourceProgram = (absolutePath: string) => {
   const program = ts.createProgram({
     rootNames: [absolutePath],
@@ -977,17 +990,13 @@ const loadSourceProgram = (absolutePath: string) => {
     },
   });
 
-  const sourceFile = program.getSourceFile(absolutePath);
-
-  if (sourceFile === undefined)
-    throw new SourceCompileError(`cannot read or parse source file ${absolutePath}`);
-
-  const diagnostic = program.getSyntacticDiagnostics(sourceFile)[0];
-
-  if (diagnostic !== undefined) throw new SourceCompileError(diagnosticMessage(diagnostic));
-
-  return { program, sourceFile };
+  return { program, sourceFile: sourceFileFrom(program, absolutePath) };
 };
+
+const loadRelatedSource = (program: ts.Program, absolutePath: string) =>
+  program.getSourceFile(absolutePath) === undefined
+    ? loadSourceProgram(absolutePath)
+    : { program, sourceFile: sourceFileFrom(program, absolutePath) };
 
 const sourceFunctionSymbols = (
   program: ts.Program,
@@ -1176,7 +1185,7 @@ export const compileSourceProof = (
   const proofDirectory = dirname(absoluteProofPath);
   const absolutePath = realpathSync(resolve(proofDirectory, proof.sourceFile));
   assertSourceModuleMatches(program, proofSourceFile, proofExportName, absolutePath);
-  const sourceFile = loadSourceProgram(absolutePath).sourceFile;
+  const sourceFile = loadRelatedSource(program, absolutePath).sourceFile;
 
   const resultVariables = proof.program.variables.filter(
     (variable) => variable.id === proof.resultVariableId,
@@ -1819,7 +1828,7 @@ export const compileSourceEffectProof = (
     proofExportName,
     absolutePath,
   );
-  const loadedSource = loadSourceProgram(absolutePath);
+  const loadedSource = loadRelatedSource(loadedProof.program, absolutePath);
   const declaration = findTarget(loadedSource.sourceFile, proof.functionName);
 
   const signature = validateEffectSignature(
