@@ -182,36 +182,41 @@ class Z3BackendImpl implements Z3Backend {
     if (program.assertions.length === 0) throw new Error("Proof contains no assertions");
     const context = this.context;
     const solver = new context.Solver();
-    const values = this.registerVariables(program, context, solver);
 
-    const variableNames = new Map(
-      program.variables.map((variable) => [variable.id, variable.name]),
-    );
+    try {
+      const values = this.registerVariables(program, context, solver);
 
-    await this.checkAssumptions(program, context, solver, values);
+      const variableNames = new Map(
+        program.variables.map((variable) => [variable.id, variable.name]),
+      );
 
-    const outcomes = await this.checkAssertions(program, context, solver, values, variableNames);
+      await this.checkAssumptions(program, context, solver, values);
 
-    const failed = outcomes.filter(isFailedAssertion);
+      const outcomes = await this.checkAssertions(program, context, solver, values, variableNames);
 
-    if (failed.length > 0) {
-      const failures: Array<Counterexample> = [];
+      const failed = outcomes.filter(isFailedAssertion);
 
-      for (const outcome of failed) failures.push(outcome.counterexample);
+      if (failed.length > 0) {
+        const failures: Array<Counterexample> = [];
+
+        for (const outcome of failed) failures.push(outcome.counterexample);
+
+        return Object.freeze({
+          kind: "Failed",
+          proof: program.proof,
+          assertions: Object.freeze(outcomes),
+          failures: Object.freeze(failures),
+        });
+      }
 
       return Object.freeze({
-        kind: "Failed",
+        kind: "Verified",
         proof: program.proof,
-        assertions: Object.freeze(outcomes),
-        failures: Object.freeze(failures),
+        assertions: Object.freeze(outcomes.filter(isVerifiedAssertion)),
       });
+    } finally {
+      solver.release();
     }
-
-    return Object.freeze({
-      kind: "Verified",
-      proof: program.proof,
-      assertions: Object.freeze(outcomes.filter(isVerifiedAssertion)),
-    });
   }
 
   private async checkAssertions<Name extends string>(
@@ -492,14 +497,21 @@ class Z3BackendImpl implements Z3Backend {
             `Z3 returned unknown for assertion "${assertion.label}": ${solver.reasonUnknown()}`,
           );
         case "sat": {
-          const counterexample = this.decodeCounterexample(
-            program,
-            assertion.label,
-            assertion.expression,
-            solver.model(),
-            values,
-            variableNames,
-          );
+          const model = solver.model();
+          let counterexample: Counterexample;
+
+          try {
+            counterexample = this.decodeCounterexample(
+              program,
+              assertion.label,
+              assertion.expression,
+              model,
+              values,
+              variableNames,
+            );
+          } finally {
+            model.release();
+          }
 
           return Object.freeze({
             kind: "AssertionFailed",
