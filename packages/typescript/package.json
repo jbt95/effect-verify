@@ -1,0 +1,24 @@
+{
+  "name": "@effect-verifier/typescript",
+  "version": "0.1.0",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@effect-verifier/core": "workspace:*",
+    "@typescript/typescript6": "6.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@effect-verifier/z3",
+  "version": "0.1.0",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@effect-verifier/core": "workspace:*",
+    "effect": "3.22.2",
+    "z3-solver": "5.2.0"
+  }
+}

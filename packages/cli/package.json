@@ -1,0 +1,31 @@
+{
+  "name": "@effect-verifier/cli",
+  "version": "0.1.0",
+  "bin": {
+    "effect-verify": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@effect-verifier/core": "workspace:*",
+    "@effect-verifier/schema": "workspace:*",
+    "@effect-verifier/typescript": "workspace:*",
+    "@effect-verifier/z3": "workspace:*",
+    "effect": "3.22.2",
+    "z3-solver": "5.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0"
+  }
+}

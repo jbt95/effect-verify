@@ -1,0 +1,35 @@
+{
+  "name": "effect-verify-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r --workspace-concurrency=1 run build",
+    "benchmark": "pnpm build && vitest bench benchmarks",
+    "test": "pnpm build && pnpm check:examples && vitest run tests",
+    "check:examples": "tsc -p examples/tsconfig.json",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "check": "pnpm format:check && pnpm lint && pnpm test",
+    "effect-verify": "node packages/cli/dist/index.js"
+  },
+  "devDependencies": {
+    "@effect-verifier/cli": "workspace:*",
+    "@effect-verifier/core": "workspace:*",
+    "@effect-verifier/schema": "workspace:*",
+    "@effect-verifier/typescript": "workspace:*",
+    "@effect-verifier/z3": "workspace:*",
+    "@oxlint/plugins": "1.85.0",
+    "@types/node": "26.2.0",
+    "effect": "3.22.2",
+    "oxfmt": "0.70.0",
+    "oxlint": "1.85.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.4"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "packageManager": "pnpm@11.18.0"
+}
