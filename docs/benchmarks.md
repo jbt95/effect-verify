@@ -1,41 +1,46 @@
 # Benchmarks
 
-The repository includes a repeatable Vitest benchmark for solver throughput at test-suite scale. It is separate from `pnpm test` so normal correctness runs stay fast and deterministic.
-
-## Run the benchmark
-
-From the repository root:
+Run the latency benchmark from the repository root:
 
 ```sh
 pnpm benchmark
 ```
 
-The script builds the workspace, then runs `benchmarks/verification.bench.ts` in Vitest benchmark mode. It uses one warmup-free sample per workload so the large cases do not repeat unnecessarily. Benchmark timings still vary with CPU load, Node version, Z3 worker startup, and system thermals.
-
-The benchmark reuses one backend instance and prepares proof programs before measuring. The backend also reuses one Z3 context and creates a fresh solver for each proof, so the independent-proof workload measures solver checks without creating a new Z3 context for every case. Each workload therefore measures verification work rather than module imports or proof compilation.
+This builds the workspace, then runs `benchmarks/verification.bench.ts` in Vitest benchmark mode. It uses explicit warmup iterations and repeated samples; the custom report gives nearest-rank p50, p95, and p99 in milliseconds. The benchmark takes about 100 seconds on the reference machine. Percentiles from 100 samples are still rough tail estimates, not service-level guarantees.
 
 ## Workloads
 
-| Workload                        | What it measures                                                                               |
-| ------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `1,000 assertions in one proof` | One backend verification with 1,000 assertions sharing one input domain.                       |
-| `2,000 assertions in one proof` | Solver and backend scaling as a single proof grows to 2,000 assertions.                        |
-| `1,000 independent proof runs`  | 1,000 separate backend verifications, which is closer to a suite containing many small proofs. |
+| Workload                                        |      Samples | What it measures                                                                                |
+| ----------------------------------------------- | -----------: | ----------------------------------------------------------------------------------------------- |
+| Compile a 1,000-assertion core proof            |          100 | Core proof-builder compilation, without Z3.                                                     |
+| Verify 1,000 / 2,000 assertions                 |     100 each | Backend verification of precompiled, all-pass proofs.                                           |
+| Verify 8 assertions with a mixed failure        |          100 | The batched query's failing path, individual fallback, and counterexample decoding.             |
+| Verify one independent proof                    |          500 | A single small backend verification per sample.                                                 |
+| Compile a TypeScript source proof               |          100 | TypeScript frontend compilation without Z3.                                                     |
+| Verify a precompiled TypeScript source proof    |          100 | Backend verification without frontend compilation.                                              |
+| Compile and verify a TypeScript source proof    |          100 | The combined in-process path.                                                                   |
+| 16 concurrent independent proofs on one backend | 320 requests | Per-request latency under concurrent submission to the serialized backend; includes queue wait. |
 
-All workloads must return `Verified`; an unexpected `Failed` or operational error fails the benchmark. These workloads use small bounded integer properties to make solver and backend overhead visible; add domain-specific formulas before using the numbers for a complex application. The independent runs execute sequentially because one backend instance serializes solver checks. The benchmark does not report a universal performance threshold because solver performance depends on the host and the encoded formula.
+The benchmark uses bounded integer examples to make solver and wrapper costs visible. Real formulas and deployment conditions can have very different latency. All-pass and failure cases must return their expected results or the benchmark fails.
 
-## Reference runs
+## Latest reference run
 
-Both tables below use one warmup-free sample per workload. They are smoke-scale references, not stable performance guarantees. The latest run includes batched assertion checks; the machine had the same CPU and Node version as the previous run, but a different macOS version, so treat the comparison as directional.
+Apple M2 Pro, macOS 26.6.2, Node.js 26.5.1, pnpm 11.18.0, Vitest 4.1.4, pinned Z3 solver. These are one run, not performance guarantees.
 
-| Workload                        | Previous reference |  Latest run | Latest throughput |
-| ------------------------------- | -----------------: | ----------: | ----------------: |
-| `1,000 assertions in one proof` |        1,484.10 ms |   154.98 ms |    6.45 batches/s |
-| `2,000 assertions in one proof` |        2,651.92 ms |   120.25 ms |    8.32 batches/s |
-| `1,000 independent proof runs`  |        7,259.45 ms | 6,103.31 ms |    0.16 batches/s |
+| Workload                                     | p50 (ms) | p95 (ms) | p99 (ms) | Samples |
+| -------------------------------------------- | -------: | -------: | -------: | ------: |
+| Compile a 1,000-assertion core proof         |     0.42 |     0.57 |     1.96 |     100 |
+| Verify 1,000 assertions                      |    59.10 |    64.23 |    65.09 |     100 |
+| Verify 2,000 assertions                      |   113.34 |   119.33 |   122.56 |     100 |
+| Verify 8 assertions with a mixed failure     |    17.90 |    18.67 |    19.89 |     100 |
+| Verify one independent proof                 |     5.75 |     6.12 |     6.71 |     500 |
+| Compile a TypeScript source proof            |   320.23 |   348.46 |   377.69 |     100 |
+| Verify a precompiled TypeScript source proof |     6.91 |     7.91 |     8.19 |     100 |
+| Compile and verify a TypeScript source proof |   325.98 |   352.80 |   383.09 |     100 |
+| 16 concurrent requests on one backend        |    49.39 |    90.39 |    93.16 |     320 |
 
-The previous reference was recorded on an Apple M2 Pro Mac running macOS 25.6.0. The latest run was recorded on the same model with macOS 26.6.2. Both used Node.js 26.5.1, pnpm 11.18.0, Vitest 4.1.4, and the pinned Z3 solver.
+The main p99 finding is that compiling a TypeScript source proof takes about 46 times as long at p50 as verifying its already-compiled program. The source frontend, not the Z3 wrapper, dominates this path; a Rust rewrite of the solver wrapper is therefore not supported by these measurements. Compiling the related source module through the already-loaded TypeScript `Program` reduced source-compilation p50 from about 384 ms to about 320 ms in this run. Backend verification under 16 concurrent submissions reaches about 93 ms p99 because one backend serializes solver work.
 
-The latest 1,000- and 2,000-assertion workloads use the batched fast path when all assertions pass. The independent-proof workload does not, and still pays for a solver check per proof. In this run, the 2,000-assertion result was faster than the 1,000-assertion result. Since each workload runs once, in order, don't read these measurements as a scaling curve. Repeat the benchmark under stable conditions before using the numbers for capacity planning.
+The backend now explicitly releases each Z3 solver and decoded counterexample model. Repeated benchmark runs had intermittently failed with a WASM `memory access out of bounds` error before deterministic release was added; the full repeated benchmark and the serial test suite passed afterward. This is evidence consistent with delayed native cleanup, though it does not prove that cleanup was the only cause of the earlier failures.
 
-For a normal run, use `pnpm test`. For a focused benchmark file, run `pnpm exec vitest bench benchmarks/verification.bench.ts` after `pnpm build`.
+An older smoke run used a single warmup-free sample and reported 154.98 ms for 1,000 assertions, 120.25 ms for 2,000 assertions, and 6,103.31 ms for 1,000 independent proofs. Its methodology differs, so do not compare those numbers directly with the repeated latency results above. The earlier reference run was on the same M2 Pro with macOS 25.6.0; both used Node.js 26.5.1, pnpm 11.18.0, Vitest 4.1.4, and the pinned Z3 solver.
