@@ -138,14 +138,20 @@ A `Verified` result applies to the encoded model and its stated domains. It does
 
 ```sh
 pnpm test          # build, type-check examples, and run tests
+pnpm test:suite    # run the tests/ suite
 pnpm test:rules    # run the vendored anti-slop rule tests
 pnpm check:tests   # type-check tests/ and benchmarks/
 pnpm lint          # run Oxlint with the vendored anti-slop rules
 pnpm format:check  # check formatting with Oxfmt
 pnpm benchmark     # run the solver performance benchmark
-pnpm check         # format, lint, type-check, rule tests, and tests
+pnpm check         # format, lint, build, type-check, rule tests, and tests
 ```
 
 `pnpm check` is what CI runs. It is the single gate for everything that must hold before
-merge: formatting, lint, the type checks for `tests/` and `benchmarks/`, the vendored
-anti-slop rule suite, and the test suite itself.
+merge: formatting, lint, a build, the type checks for `tests/`, `benchmarks/`, and
+`examples/`, the vendored anti-slop rule suite, and the test suite itself.
+
+`pnpm check` builds before it type-checks because both type checks import the workspace
+packages through the `dist` entry points their manifests publish. A fresh clone has no
+`dist`, so type-checking first reports every workspace import as missing. Run
+`pnpm check:tests` or `pnpm check:examples` on their own only after `pnpm build`.

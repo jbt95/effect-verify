@@ -30,8 +30,10 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # format:check, lint, the tests/ + benchmarks/ type check, then build,
-      # examples type check, and the vitest suite.
+      # format:check, lint, build, the tests/ + benchmarks/ and examples type
+      # checks, then the rule tests and the test suite. The build must precede
+      # both type checks: they import the workspace packages through their
+      # published `dist` entry points, which a fresh checkout does not have.
       - name: Check
         run: pnpm check
 

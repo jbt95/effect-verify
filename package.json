@@ -5,7 +5,8 @@
   "scripts": {
     "build": "pnpm -r --workspace-concurrency=1 run build",
     "benchmark": "pnpm build && vitest bench benchmarks",
-    "test": "pnpm build && pnpm check:examples && vitest run tests",
+    "test": "pnpm build && pnpm check:examples && pnpm test:suite",
+    "test:suite": "vitest run tests",
     "test:rules": "vitest run tools/oxlint/anti-slop",
     "check:examples": "tsc -p examples/tsconfig.json",
     "check:tests": "tsc -p tsconfig.tests.json",
@@ -13,7 +14,7 @@
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "check": "pnpm format:check && pnpm lint && pnpm check:tests && pnpm test:rules && pnpm test",
+    "check": "pnpm format:check && pnpm lint && pnpm build && pnpm check:tests && pnpm check:examples && pnpm test:rules && pnpm test:suite",
     "effect-verify": "node packages/cli/dist/index.js"
   },
   "devDependencies": {
