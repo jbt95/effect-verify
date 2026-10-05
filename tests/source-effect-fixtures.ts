@@ -47,7 +47,9 @@ export const unsupportedFlatMap = (value: number): EffectAPI.Effect<number, "Den
 
 export const unsupportedGen = (): EffectAPI.Effect<number, "Denied", never> =>
   Effect.gen(function* () {
-    yield* Effect.fail("Denied");
+    // SAFETY: the explicit type argument keeps the error channel a literal union so
+    // this fixture exercises the unsupported `Effect.gen` shape rather than a widened one.
+    yield* Effect.fail<"Denied">("Denied");
 
     return 1;
   });
@@ -61,19 +63,31 @@ export const requiredEnvironment = (): EffectAPI.Effect<
   { readonly service: string }
 > => Effect.fail("Denied");
 
+// The four fixtures below deliberately disagree with their declared return types. The
+// double assertion is the mismatch under test: TypeScript has no other way to express
+// "annotated as one Effect type, actually another", and the frontend must reject each
+// one on its own at verification time.
 export const wrongSuccessSort = (): EffectAPI.Effect<number, "Denied", never> =>
-  Effect.succeed(true);
+  // SAFETY: annotation declares a numeric success while the body succeeds with a boolean.
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- deliberate mismatch.
+  Effect.succeed(true) as unknown as EffectAPI.Effect<number, "Denied", never>;
 
 export const wrongFailureTag = (): EffectAPI.Effect<number, "Denied", never> =>
-  Effect.fail("Other");
+  // SAFETY: annotation omits "Other" from the declared finite error union.
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- deliberate mismatch.
+  Effect.fail("Other") as unknown as EffectAPI.Effect<number, "Denied", never>;
 
 export const recordFailure = (): EffectAPI.Effect<number, "Denied", never> =>
-  Effect.fail({ tag: "Denied" });
+  // SAFETY: an object-shaped error is hidden behind a string-literal-tag annotation.
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- deliberate mismatch.
+  Effect.fail({ tag: "Denied" }) as unknown as EffectAPI.Effect<number, "Denied", never>;
 
 export const dynamicFailure = (): EffectAPI.Effect<number, "Denied", never> => {
   const tag: string = "Denied";
 
-  return Effect.fail(tag);
+  // SAFETY: `tag` is widened to `string`, so the failure tag is not a literal.
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- deliberate mismatch.
+  return Effect.fail(tag) as unknown as EffectAPI.Effect<number, "Denied", never>;
 };
 
 const wrappedSucceed = (payload: number): EffectAPI.Effect<number> => Effect.succeed(payload);

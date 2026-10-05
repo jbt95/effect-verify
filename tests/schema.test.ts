@@ -164,24 +164,10 @@ describe("Effect Schema translation", () => {
   });
 
   it("rejects exclusive-bound overflow, floats, mixed literal unions, and unknown refinements", async () => {
-    const cases: ReadonlyArray<readonly [Schema.Schema<unknown>, string]> = [
-      [Schema.Number.pipe(Schema.int(), Schema.greaterThan(Number.MAX_SAFE_INTEGER)), "overflows"],
-      [Schema.Number.pipe(Schema.int(), Schema.lessThan(Number.MIN_SAFE_INTEGER)), "overflows"],
-      [Schema.Number.pipe(Schema.int(), Schema.greaterThan(1.5)), "safe integer"],
-      [
-        Schema.Union(Schema.Literal("text"), Schema.Literal(1)),
-        "same boolean, integer, or string sort",
-      ],
-      [
-        Schema.Number.pipe(
-          Schema.int(),
-          Schema.filter((value) => value !== 0),
-        ),
-        "only Schema.int",
-      ],
-    ];
-
-    for (const [schema, message] of cases) {
+    // Each schema is passed straight to a generic helper rather than collected in a
+    // heterogeneous array. A shared array element type would force the schemas to a
+    // common supertype, and `Verify.anySchema` is generic in its schema argument.
+    const rejects = async <A, I, R>(schema: Schema.Schema<A, I, R>, message: string) => {
       const proof = Verify.proof(
         "unsupported-schema",
         Effect.gen(function* () {
@@ -191,7 +177,28 @@ describe("Effect Schema translation", () => {
       );
 
       await expect(Effect.runPromise(compileProof(proof))).rejects.toThrow(message);
-    }
+    };
+
+    await rejects(
+      Schema.Number.pipe(Schema.int(), Schema.greaterThan(Number.MAX_SAFE_INTEGER)),
+      "overflows",
+    );
+    await rejects(
+      Schema.Number.pipe(Schema.int(), Schema.lessThan(Number.MIN_SAFE_INTEGER)),
+      "overflows",
+    );
+    await rejects(Schema.Number.pipe(Schema.int(), Schema.greaterThan(1.5)), "safe integer");
+    await rejects(
+      Schema.Union(Schema.Literal("text"), Schema.Literal(1)),
+      "same boolean, integer, or string sort",
+    );
+    await rejects(
+      Schema.Number.pipe(
+        Schema.int(),
+        Schema.filter((value) => value !== 0),
+      ),
+      "only Schema.int",
+    );
   });
 
   it("rejects floating-point schemas and arbitrary predicates", async () => {

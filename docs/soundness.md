@@ -58,6 +58,8 @@ Only AST variants implemented by every backend are supported. An unknown/malform
 
 The Z3 backend translates the typed IR using `z3-solver`. `UNSAT` is trusted according to the Z3 solver implementation and its integer-theory semantics; this prototype does not independently certify solver proof terms. A solver `unknown` response is an error. SAT models are decoded for every user-visible symbolic variable; a decoding failure is an error rather than an incomplete counterexample. Checks through one backend instance are serialized, and Node worker threads are cleaned up when the backend is closed.
 
+The backend accepts an optional per-query budget through `makeZ3Backend({ timeoutMilliseconds })`, which the CLI exposes as `--timeout`. An expired budget makes Z3 return `unknown`, which is reported as an operational error with exit code 2. An incomplete proof is never reported as `Verified`, so the budget changes when a result arrives, never whether a result counts.
+
 ## Input contracts
 
 A source proof treats its declared input domains as preconditions. It does not prove that application callers validate those inputs or that the target function is always called with values in range. `isValidSourceInputs(proof, candidate)` checks a candidate tuple against those declared domains without loading or executing target code; callers remain responsible for invoking the target function themselves. The target function is parsed and lowered, not executed by the verifier. Counterexample replay in tests can confirm a modeled input against an implementation, but does not replace runtime validation or establish behavior beyond the supported subset.

@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Format, lint, and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No `version` input: pnpm/action-setup reads `packageManager` from the
+      # root package.json so the CI pnpm version can never drift from the repo.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # format:check, lint, the tests/ + benchmarks/ type check, then build,
+      # examples type check, and the vitest suite.
+      - name: Check
+        run: pnpm check
+
+  cli:
+    name: CLI end-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # Runs the built artifact exactly as an installed user would, from a fresh
+      # build with no vitest involvement, and pins the documented exit-code
+      # contract: 0 Verified, 1 a failed proof with a counterexample, 2 usage
+      # or operational error.
+      # Every invocation goes through `timeout` as a backstop. The CLI sets
+      # `process.exitCode` and arms an unreferenced escape timer that calls
+      # `process.exit`, so a proof module whose top level leaves an interval,
+      # a server, or a pending promise alive cannot stall the job. The guard
+      # still turns any future hang into a failed step rather than a stuck one.
+      - name: Assert the documented exit-code contract
+        shell: bash
+        run: |
+          cli() {
+            timeout --kill-after=30 300 node packages/cli/dist/index.js "$@"
+          }
+
+          expect_exit() {
+            local expected="$1"
+            shift
+            local status=0
+            cli "$@" || status=$?
+            if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+              echo "FAIL: the CLI never exited; the 300 s guard fired (status $status): $*" >&2
+              return 1
+            fi
+            if [ "$status" -ne "$expected" ]; then
+              echo "FAIL: expected exit $expected, got $status: $*" >&2
+              return 1
+            fi
+            echo "ok: exit $status as expected: $*"
+          }
+
+          expect_exit 0 examples/source/proof.ts clampIsNonNegative
+          expect_exit 1 examples/source/proof.ts decrementIsNonNegative
+          expect_exit 2

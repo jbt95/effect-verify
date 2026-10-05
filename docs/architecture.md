@@ -65,11 +65,15 @@ Both frontends use the TypeScript checker to resolve the proof export's first ty
 
 Loads one selected proof export from a `.ts` or `.js` module, runs the matching frontend, sends the resulting program to Z3, and prints JSON. It keeps formatting and process exit codes outside the core and backend packages.
 
+Options are parsed before the module is loaded. `--help` and `--version` exit without loading anything, `--list` prints the module's proof exports, and `--timeout` sets the per-query solver budget. An unrecognized option is a usage error rather than an ignored argument, so a mistyped flag cannot silently change what runs.
+
 The CLI exits:
 
 - 0 when the result is `Verified`
 - 1 when the result is `Failed`
 - 2 for usage, proof compilation, source compilation, schema translation, solver, or output errors
+
+Termination is explicit. A proof module is ordinary host code and may leave an interval, a server, or a pending promise alive. The CLI sets `process.exitCode` and arms an unreferenced timer that calls `process.exit`; because the timer is unreferenced, a clean run still exits naturally with fully written output, while a held-open event loop cannot stall the process. Writes to a closed pipe, such as piping into `head`, are ignored rather than treated as failures.
 
 ## Integer representation
 

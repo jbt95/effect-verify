@@ -792,7 +792,16 @@ const compileStatements = (
     const statement = statements[index];
 
     if (statement === undefined) return fallback;
-    const rest = (): Term | undefined => compileFrom(index + 1, new Map(scope));
+
+    // The continuation is compiled once and reused by every branch. Recompiling it per
+    // branch makes compilation cost exponential in the number of sequential `if`s.
+    let cachedRest: { readonly value: Term | undefined } | undefined;
+
+    const rest = (): Term | undefined => {
+      cachedRest ??= { value: compileFrom(index + 1, new Map(scope)) };
+
+      return cachedRest.value;
+    };
 
     if (ts.isVariableStatement(statement)) {
       if (
@@ -1696,7 +1705,16 @@ const lowerEffectStatements = (
     const statement = statements[index];
 
     if (statement === undefined) return fallback;
-    const rest = (): EffectTerm | undefined => lowerFrom(index + 1, new Map(scope));
+
+    // The continuation is compiled once and reused by every branch. Recompiling it per
+    // branch makes compilation cost exponential in the number of sequential `if`s.
+    let cachedRest: { readonly value: EffectTerm | undefined } | undefined;
+
+    const rest = (): EffectTerm | undefined => {
+      cachedRest ??= { value: lowerFrom(index + 1, new Map(scope)) };
+
+      return cachedRest.value;
+    };
 
     if (ts.isVariableStatement(statement)) {
       if (

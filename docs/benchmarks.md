@@ -25,22 +25,41 @@ The benchmark uses bounded integer examples to make solver and wrapper costs vis
 
 ## Latest reference run
 
-Apple M2 Pro, macOS 26.6.2, Node.js 26.5.1, pnpm 11.18.0, Vitest 4.1.4, pinned Z3 solver. These are one run, not performance guarantees.
+Apple M5, macOS 26.6.2, Node.js 26.9.0, pnpm 11.18.0, Vitest 4.1.4, pinned Z3 solver.
+These are one run, not performance guarantees.
 
 | Workload                                     | p50 (ms) | p95 (ms) | p99 (ms) | Samples |
 | -------------------------------------------- | -------: | -------: | -------: | ------: |
-| Compile a 1,000-assertion core proof         |     0.42 |     0.57 |     1.96 |     100 |
-| Verify 1,000 assertions                      |    59.10 |    64.23 |    65.09 |     100 |
-| Verify 2,000 assertions                      |   113.34 |   119.33 |   122.56 |     100 |
-| Verify 8 assertions with a mixed failure     |    17.90 |    18.67 |    19.89 |     100 |
-| Verify one independent proof                 |     5.75 |     6.12 |     6.71 |     500 |
-| Compile a TypeScript source proof            |   320.23 |   348.46 |   377.69 |     100 |
-| Verify a precompiled TypeScript source proof |     6.91 |     7.91 |     8.19 |     100 |
-| Compile and verify a TypeScript source proof |   325.98 |   352.80 |   383.09 |     100 |
-| 16 concurrent requests on one backend        |    49.39 |    90.39 |    93.16 |     320 |
+| Compile a 1,000-assertion core proof         |     0.27 |     0.40 |     1.64 |     100 |
+| Verify 1,000 assertions                      |    61.42 |    71.33 |    73.62 |     100 |
+| Verify 2,000 assertions                      |   118.63 |   138.05 |   144.07 |     100 |
+| Verify 8 assertions with a mixed failure     |    20.10 |    22.97 |    23.77 |     100 |
+| Verify one independent proof                 |     6.43 |     7.21 |     7.76 |     500 |
+| Compile a TypeScript source proof            |   210.11 |   238.19 |   248.39 |     100 |
+| Verify a precompiled TypeScript source proof |     6.74 |     7.37 |     7.82 |     100 |
+| Compile and verify a TypeScript source proof |   216.09 |   234.08 |   257.56 |     100 |
+| 16 concurrent requests on one backend        |    51.08 |    99.84 |   110.73 |     320 |
 
-The main p99 finding is that compiling a TypeScript source proof takes about 46 times as long at p50 as verifying its already-compiled program. The source frontend, not the Z3 wrapper, dominates this path; a Rust rewrite of the solver wrapper is therefore not supported by these measurements. Compiling the related source module through the already-loaded TypeScript `Program` reduced source-compilation p50 from about 384 ms to about 320 ms in this run. Backend verification under 16 concurrent submissions reaches about 93 ms p99 because one backend serializes solver work.
+The main p99 finding is that compiling a TypeScript source proof takes roughly 31 times as
+long at p50 as verifying its already-compiled program. The source frontend, not the Z3
+wrapper, dominates this path; a Rust rewrite of the solver wrapper is therefore not
+supported by these measurements. Compiling the related source module through the
+already-loaded TypeScript `Program` reduced source-compilation p50 from about 320 ms to
+about 210 ms. Backend verification under 16 concurrent submissions reaches about 111 ms
+p99 because one backend serializes solver work.
 
-The backend now explicitly releases each Z3 solver and decoded counterexample model. Repeated benchmark runs had intermittently failed with a WASM `memory access out of bounds` error before deterministic release was added; the full repeated benchmark and the serial test suite passed afterward. This is evidence consistent with delayed native cleanup, though it does not prove that cleanup was the only cause of the earlier failures.
+Source compilation is linear in the length of a statement chain. Each `if` used to
+re-lower its own continuation once per branch, so a chain of N sequential `if`
+statements cost time exponential in N. That cost is now paid once per statement: a
+30-`if` chain that previously took minutes to lower compiles in well under a second.
 
-An older smoke run used a single warmup-free sample and reported 154.98 ms for 1,000 assertions, 120.25 ms for 2,000 assertions, and 6,103.31 ms for 1,000 independent proofs. Its methodology differs, so do not compare those numbers directly with the repeated latency results above. The earlier reference run was on the same M2 Pro with macOS 25.6.0; both used Node.js 26.5.1, pnpm 11.18.0, Vitest 4.1.4, and the pinned Z3 solver.
+The backend explicitly releases each Z3 solver and decoded counterexample model. Repeated
+benchmark runs had intermittently failed with a WASM `memory access out of bounds` error
+before deterministic release was added; the full repeated benchmark and the serial test
+suite passed afterward. This is evidence consistent with delayed native cleanup, though it
+does not prove that cleanup was the only cause of the earlier failures.
+
+An older smoke run used a single warmup-free sample and reported 154.98 ms for 1,000
+assertions, 120.25 ms for 2,000 assertions, and 6,103.31 ms for 1,000 independent proofs.
+Its methodology differs, so do not compare those numbers directly with the repeated
+latency results above.

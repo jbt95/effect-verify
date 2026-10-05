@@ -6,12 +6,19 @@ import {
   Sym,
   Verify,
 } from "@effect-verifier/core";
+import type { SourceProof } from "@effect-verifier/core";
 import { compileSourceProof, SourceCompileError } from "@effect-verifier/typescript";
 import { makeZ3Backend } from "@effect-verifier/z3";
 import type { Z3Backend } from "@effect-verifier/z3";
 import { fileURLToPath } from "node:url";
 import { decrement } from "../examples/source/functions.ts";
-import { arithmetic, conditional, countedEarlyReturn, logical } from "./source-fixtures.ts";
+import {
+  arithmetic,
+  conditional,
+  countedEarlyReturn,
+  deepConditionalChain,
+  logical,
+} from "./source-fixtures.ts";
 import {
   clampIsNonNegative,
   decrementIsNonNegative,
@@ -178,6 +185,17 @@ export const unsafeProofBinding = Verify.sourceFunction<SourceFunctions, "increm
   assertion: (_inputs, result) => Sym.gte(result, Sym.literal(0)),
 });
 
+export const deepConditionalChainBinding = Verify.sourceFunction<
+  SourceFixtureFunctions,
+  "deepConditionalChain"
+>({
+  name: "deep-conditional-chain-binding",
+  sourceFile: "./source-fixtures.ts",
+  functionName: "deepConditionalChain",
+  inputs: [Verify.integer({ min: -30, max: 30 })],
+  assertion: (_inputs, result) => Sym.gte(result, Sym.literal(-100)),
+});
+
 let backend: Z3Backend;
 
 beforeAll(async () => {
@@ -236,7 +254,7 @@ const checkFiniteDomain = async (
 
     const decodedResult = Number(model.get("result"));
 
-    expect(decodedInputs).toHaveLength(cases[0]?.inputs.length);
+    expect(decodedInputs).toHaveLength(cases.at(0)?.inputs.length ?? 0);
     expect(
       cases.some(
         ({ inputs }) =>
@@ -410,7 +428,9 @@ describe("TypeScript source proofs", () => {
   });
 
   it("rejects forged input and result sorts", () => {
-    const wrongInputSort = {
+    // SAFETY: the sort is deliberately replaced with a value the declared boolean
+    // domain cannot satisfy, so the frontend has an input-sort mismatch to reject.
+    const wrongInputSort: SourceProof = {
       ...booleanSourceBinding,
       program: {
         ...booleanSourceBinding.program,
@@ -491,6 +511,22 @@ describe("TypeScript source proofs", () => {
     const boundary = compileSourceProof(counted32Binding, testProofModulePath, "counted32Binding");
     expect((await Effect.runPromise(backend.verify(boundary))).kind).toBe("Verified");
   });
+
+  it("compiles a long chain of exhaustive conditionals without exponential blowup", async () => {
+    const program = compileSourceProof(
+      deepConditionalChainBinding,
+      testProofModulePath,
+      "deepConditionalChainBinding",
+    );
+
+    expect((await Effect.runPromise(backend.verify(program))).kind).toBe("Verified");
+
+    // The chain returns `value + (i + 1)` at the first `i` where `value > i`, and falls
+    // through to `value` when no condition matches. Only positive inputs match one.
+    for (const value of [-3, -1, 0, 1, 2, 3]) {
+      expect(deepConditionalChain(value)).toBe(value > 0 ? value + 1 : value);
+    }
+  }, 20000);
 
   it("rejects counted loops over the cap, dynamic bounds, and loop-carried mutation", () => {
     expect(() =>

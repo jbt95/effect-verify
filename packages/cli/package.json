@@ -1,6 +1,28 @@
 {
   "name": "@effect-verifier/cli",
   "version": "0.1.0",
+  "description": "Command-line interface for @effect-verifier: verifies symbolic and source proofs against Z3.",
+  "keywords": [
+    "cli",
+    "effect",
+    "smt",
+    "typescript",
+    "verification",
+    "z3"
+  ],
+  "homepage": "https://github.com/jbt95/effect-verify#readme",
+  "bugs": {
+    "url": "https://github.com/jbt95/effect-verify/issues"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Jordi Bermejo Tornero",
+    "url": "https://github.com/jbt95"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jbt95/effect-verify.git"
+  },
   "bin": {
     "effect-verify": "./dist/index.js"
   },
@@ -8,14 +30,19 @@
     "dist"
   ],
   "type": "module",
+  "sideEffects": true,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "prepack": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@effect-verifier/core": "workspace:*",
@@ -27,5 +54,8 @@
   },
   "devDependencies": {
     "@types/node": "26.2.0"
+  },
+  "engines": {
+    "node": ">=22.18.0"
   }
 }

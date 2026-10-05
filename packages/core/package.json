@@ -1,20 +1,50 @@
 {
   "name": "@effect-verifier/core",
   "version": "0.1.0",
+  "description": "Symbolic proof DSL, proof compilation, and the backend contract for verifying a supported subset of Effect TypeScript.",
+  "keywords": [
+    "effect",
+    "formal-methods",
+    "smt",
+    "typescript",
+    "verification",
+    "z3"
+  ],
+  "homepage": "https://github.com/jbt95/effect-verify#readme",
+  "bugs": {
+    "url": "https://github.com/jbt95/effect-verify/issues"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Jordi Bermejo Tornero",
+    "url": "https://github.com/jbt95"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jbt95/effect-verify.git"
+  },
   "files": [
     "dist"
   ],
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "prepack": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "effect": "3.22.2"
+  },
+  "engines": {
+    "node": ">=22.18.0"
   }
 }

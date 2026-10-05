@@ -203,6 +203,52 @@ export const localEffectBinding = Verify.sourceEffectFunction<Fixtures, "localOu
   failure: (_inputs, tag) => Sym.eq(tag, Sym.literal("Denied")),
 });
 
+// The compile-time name filter rejects every target below, so each binding is a deliberate
+// type-level bypass: the proof must still be refused at verification time with the diagnostic
+// that docs/soundness.md documents.
+// @ts-expect-error the target widens E to string, which is not a finite union of literal tags
+export const unknownFailureBinding = Verify.sourceEffectFunction<Fixtures, "unknownFailure">({
+  name: "unknown-failure",
+  sourceFile: "./source-effect-fixtures.ts",
+  functionName: "unknownFailure",
+  inputs: [],
+  success: () => Sym.literal(true),
+  failure: () => Sym.literal(true),
+});
+
+// @ts-expect-error the target declares an object-shaped error, not a string-literal tag
+export const objectFailureBinding = Verify.sourceEffectFunction<Fixtures, "objectFailure">({
+  name: "object-failure",
+  sourceFile: "./source-effect-fixtures.ts",
+  functionName: "objectFailure",
+  inputs: [],
+  success: () => Sym.literal(true),
+  failure: () => Sym.literal(true),
+});
+
+// @ts-expect-error the target takes a string parameter, so it has no supported argument tuple
+export const arbitraryFailureBinding = Verify.sourceEffectFunction<Fixtures, "arbitraryFailure">({
+  name: "arbitrary-failure",
+  sourceFile: "./source-effect-fixtures.ts",
+  functionName: "arbitraryFailure",
+  inputs: [],
+  success: () => Sym.literal(true),
+  failure: () => Sym.literal(true),
+});
+
+export const requiredEnvironmentBinding = Verify.sourceEffectFunction<
+  Fixtures,
+  // @ts-expect-error a required environment layer leaves no supported argument tuple
+  "requiredEnvironment"
+>({
+  name: "required-environment",
+  sourceFile: "./source-effect-fixtures.ts",
+  functionName: "requiredEnvironment",
+  inputs: [],
+  success: () => Sym.literal(true),
+  failure: () => Sym.literal(true),
+});
+
 const proofPath = fileURLToPath(new URL("./source-effect.test.ts", import.meta.url));
 
 let backend: Z3Backend;
@@ -348,4 +394,34 @@ describe("source Effect proofs", () => {
       expect(() => compileSourceEffectProof(proof, proofPath, exportName)).toThrow();
     }
   }, 15000);
+
+  it("rejects widened, object, and dynamic error types and required environments", () => {
+    // The frontend reads the declared error type before it lowers a body, so the widened, the
+    // object-shaped, and the dynamic-tag targets all fail on the finite-union rule. Only the
+    // required-environment target has its own diagnostic.
+    for (const [proof, exportName, diagnostic] of [
+      [
+        unknownFailureBinding,
+        "unknownFailureBinding",
+        "Effect error type must be a finite union of string literals",
+      ],
+      [
+        objectFailureBinding,
+        "objectFailureBinding",
+        "Effect error type must be a finite union of string literals",
+      ],
+      [
+        arbitraryFailureBinding,
+        "arbitraryFailureBinding",
+        "Effect error type must be a finite union of string literals",
+      ],
+      [
+        requiredEnvironmentBinding,
+        "requiredEnvironmentBinding",
+        "Effect functions requiring an environment are unsupported",
+      ],
+    ] as const) {
+      expect(() => compileSourceEffectProof(proof, proofPath, exportName)).toThrow(diagnostic);
+    }
+  });
 });

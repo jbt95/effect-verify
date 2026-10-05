@@ -32,6 +32,8 @@ export const booleanLocalReturns = (enabled: boolean): boolean => {
   else return result;
 };
 
+// @ts-expect-error TS2366: the missing ending return is deliberate. This file is parsed
+// as source text by the frontend, which must reject the incomplete return path itself.
 export const incompleteReturns = (value: number): number => {
   if (value < 0) return value;
 };
@@ -108,4 +110,70 @@ export const wrongDirectionLoop = (): number => {
   for (let index = 0; index < 2; index--) return index;
 
   return 0;
+};
+
+// Thirty sequential conditionals. Each `if` has no `else`, so both of its arms reuse
+// the same continuation. That is the shape that made frontend compilation exponential.
+export const deepConditionalChain = (value: number): number => {
+  if (value > 0) return value + 1;
+
+  if (value > 1) return value + 2;
+
+  if (value > 2) return value + 3;
+
+  if (value > 3) return value + 4;
+
+  if (value > 4) return value + 5;
+
+  if (value > 5) return value + 6;
+
+  if (value > 6) return value + 7;
+
+  if (value > 7) return value + 8;
+
+  if (value > 8) return value + 9;
+
+  if (value > 9) return value + 10;
+
+  if (value > 10) return value + 11;
+
+  if (value > 11) return value + 12;
+
+  if (value > 12) return value + 13;
+
+  if (value > 13) return value + 14;
+
+  if (value > 14) return value + 15;
+
+  if (value > 15) return value + 16;
+
+  if (value > 16) return value + 17;
+
+  if (value > 17) return value + 18;
+
+  if (value > 18) return value + 19;
+
+  if (value > 19) return value + 20;
+
+  if (value > 20) return value + 21;
+
+  if (value > 21) return value + 22;
+
+  if (value > 22) return value + 23;
+
+  if (value > 23) return value + 24;
+
+  if (value > 24) return value + 25;
+
+  if (value > 25) return value + 26;
+
+  if (value > 26) return value + 27;
+
+  if (value > 27) return value + 28;
+
+  if (value > 28) return value + 29;
+
+  if (value > 29) return value + 30;
+
+  return value;
 };

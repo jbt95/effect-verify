@@ -1,6 +1,23 @@
-# Effect Verify
+<h1 align="center">Effect Verify</h1>
 
-Effect Verify is a prototype solver-backed verifier for an explicit symbolic subset of Effect TypeScript. It can verify:
+<p align="center">
+  <a href="https://github.com/jbt95/effect-verify/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/jbt95/effect-verify/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://www.typescriptlang.org"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-7.x-3178C6?logo=typescript&logoColor=white"></a>
+  <a href="https://effect.website"><img alt="Effect" src="https://img.shields.io/badge/Effect-3.22-191919?logo=effect&logoColor=white"></a>
+  <a href="https://github.com/Z3Prover/z3"><img alt="solver" src="https://img.shields.io/badge/solver-Z3%20WASM-d43790"></a>
+  <a href="https://nodejs.org"><img alt="Node" src="https://img.shields.io/badge/node-%3E%3D22.18-5FA04E?logo=node.js&logoColor=white"></a>
+  <a href="https://pnpm.io"><img alt="pnpm" src="https://img.shields.io/badge/pnpm-11.18-F69220?logo=pnpm&logoColor=white"></a>
+  <img alt="semantics" src="https://img.shields.io/badge/semantics-fail--closed-3FB950">
+  <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-yellow"></a>
+</p>
+
+<p align="center">
+  Fail-closed, solver-backed verification for an explicit subset of Effect TypeScript.
+</p>
+
+---
+
+Effect Verify can verify:
 
 - mathematical-integer properties built with `Sym` and `Verify`
 - a restricted subset of exported pure TypeScript functions
@@ -9,6 +26,9 @@ Effect Verify is a prototype solver-backed verifier for an explicit symbolic sub
 The verifier does not execute the function under test. It parses and lowers supported source, asks Z3 whether an assertion can fail, and returns either `Verified` or a concrete counterexample.
 
 This is not a general JavaScript model checker. It rejects unsupported source, schemas, and operations instead of guessing. Read the [soundness contract](docs/soundness.md) before relying on a result.
+
+> **Status.** Nothing is published to a registry yet, so install requires cloning. See
+> [Roadmap](docs/roadmap.md#next-publish) for what stands between this and a release.
 
 ## Requirements
 
@@ -82,10 +102,19 @@ The frontend requires explicit `number` or `boolean` parameter and return types.
 The command syntax is:
 
 ```text
-effect-verify <proof-module.ts|proof-module.js> [exportName]
+effect-verify <proof-module.ts|proof-module.js> [exportName] [options]
 ```
 
 If the export name is omitted, the CLI selects a `default` proof or the only proof in the module.
+
+| Option            | Effect                                                                                        |
+| ----------------- | --------------------------------------------------------------------------------------------- |
+| `-l`, `--list`    | List the proof exports in the module, then exit.                                              |
+| `--timeout <ms>`  | Give the solver a per-query budget. An expired budget is an error, never a `Verified` result. |
+| `-h`, `--help`    | Print usage and exit.                                                                         |
+| `-V`, `--version` | Print the version and exit.                                                                   |
+
+Unrecognized options are rejected instead of ignored, so a mistyped flag cannot silently change what runs. Without `--timeout`, a query runs until the solver finishes; set a budget in CI so an unexpectedly hard formula fails fast.
 
 | Exit code | Result               | Meaning                                                                                                              |
 | --------- | -------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -103,14 +132,20 @@ A `Verified` result applies to the encoded model and its stated domains. It does
 - [Architecture](docs/architecture.md): package boundaries and the compilation pipeline.
 - [Effect Verify and Vitest](docs/vitest-comparison.md): what a proof establishes compared with a passing test.
 - [Benchmarks](docs/benchmarks.md): solver throughput at larger batch and suite sizes.
-- [Roadmap](docs/roadmap.md): current prototype scope and planned work.
+- [Roadmap](docs/roadmap.md): current scope, what has landed, and what stands between this and a release.
 
 ## Development
 
 ```sh
 pnpm test          # build, type-check examples, and run tests
-pnpm lint          # run Oxlint
+pnpm test:rules    # run the vendored anti-slop rule tests
+pnpm check:tests   # type-check tests/ and benchmarks/
+pnpm lint          # run Oxlint with the vendored anti-slop rules
 pnpm format:check  # check formatting with Oxfmt
 pnpm benchmark     # run the solver performance benchmark
-pnpm check         # run formatting, lint, and tests
+pnpm check         # format, lint, type-check, rule tests, and tests
 ```
+
+`pnpm check` is what CI runs. It is the single gate for everything that must hold before
+merge: formatting, lint, the type checks for `tests/` and `benchmarks/`, the vendored
+anti-slop rule suite, and the test suite itself.

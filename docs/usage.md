@@ -11,21 +11,32 @@ pnpm install
 pnpm build
 ```
 
-The workspace packages resolve through `workspace:*`, so use the repository's package manager rather than installing each package separately.
+The workspace packages resolve through `workspace:*`, so use the repository's package manager rather than installing each package separately. No package is published to a registry yet, so cloning the repository is the only way to run the CLI today. See [Roadmap](roadmap.md#next-publish).
 
 ## Run a proof
 
-The CLI accepts one proof module and an optional export name:
+The CLI accepts one proof module, an optional export name, and options:
 
 ```text
-pnpm effect-verify <proof-module.ts|proof-module.js> [exportName]
+pnpm effect-verify <proof-module.ts|proof-module.js> [exportName] [options]
 ```
+
+| Option            | Effect                                              |
+| ----------------- | --------------------------------------------------- |
+| `-l`, `--list`    | List the proof exports in the module, then exit.    |
+| `--timeout <ms>`  | Give the solver a per-query budget in milliseconds. |
+| `-h`, `--help`    | Print usage and exit.                               |
+| `-V`, `--version` | Print the version and exit.                         |
+
+An unrecognized option is an error, not a silently ignored argument. Omit `--timeout` to let the solver run to completion; set a budget in CI so an unexpectedly hard formula fails instead of running unbounded.
 
 For example:
 
 ```sh
-pnpm effect-verify examples/source/proof.ts clampIsNonNegative
+pnpm effect-verify examples/source/proof.ts clampIsNonNegative --timeout 10000
 ```
+
+An expired budget is reported as an operational error with exit code 2. It is never reported as `Verified`.
 
 The proof module is loaded with Node. TypeScript files must use syntax that Node can erase without compiling, such as type annotations and `import type`; enums, namespaces with runtime values, and other non-erasable syntax are not supported. Compiled JavaScript proof modules also work.
 

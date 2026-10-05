@@ -134,12 +134,20 @@ const assertNever = (value: never): never => {
   throw new Error(`Unsupported symbolic expression: ${String(value)}`);
 };
 
+export interface Z3BackendOptions {
+  /** Per-query solver budget in milliseconds. Omit for no limit. */
+  readonly timeoutMilliseconds?: number;
+}
+
 class Z3BackendImpl implements Z3Backend {
   private closed = false;
   private tail: Promise<void> = Promise.resolve();
   private readonly context: Context<"effect-verify">;
 
-  constructor(private readonly api: Z3Api) {
+  constructor(
+    private readonly api: Z3Api,
+    private readonly options: Z3BackendOptions,
+  ) {
     this.context = new this.api.Context("effect-verify");
   }
 
@@ -178,10 +186,19 @@ class Z3BackendImpl implements Z3Backend {
     return result;
   }
 
+  private timeoutHint(): string {
+    return this.options.timeoutMilliseconds === undefined
+      ? ""
+      : " (a --timeout budget was set; raise it or simplify the proof)";
+  }
+
   private async solve(program: VerificationProgram): Promise<VerificationResult> {
     if (program.assertions.length === 0) throw new Error("Proof contains no assertions");
     const context = this.context;
     const solver = new context.Solver();
+
+    if (this.options.timeoutMilliseconds !== undefined)
+      solver.set("timeout", this.options.timeoutMilliseconds);
 
     try {
       const values = this.registerVariables(program, context, solver);
@@ -411,7 +428,7 @@ class Z3BackendImpl implements Z3Backend {
         );
       case "unknown":
         throw new Error(
-          `Z3 could not determine whether proof assumptions are satisfiable: ${solver.reasonUnknown()}`,
+          `Z3 could not determine whether proof assumptions are satisfiable: ${solver.reasonUnknown()}${this.timeoutHint()}`,
         );
       default:
         return assertNever(status);
@@ -494,7 +511,7 @@ class Z3BackendImpl implements Z3Backend {
           });
         case "unknown":
           throw new Error(
-            `Z3 returned unknown for assertion "${assertion.label}": ${solver.reasonUnknown()}`,
+            `Z3 returned unknown for assertion "${assertion.label}": ${solver.reasonUnknown()}${this.timeoutHint()}`,
           );
         case "sat": {
           const model = solver.model();
@@ -765,11 +782,13 @@ class Z3BackendImpl implements Z3Backend {
   }
 }
 
-export const makeZ3Backend = (): Effect.Effect<Z3Backend, VerificationBackendError> =>
+export const makeZ3Backend = (
+  options: Z3BackendOptions = {},
+): Effect.Effect<Z3Backend, VerificationBackendError> =>
   Effect.map(
     Effect.tryPromise({
       try: () => init(),
       catch: (cause) => new VerificationBackendError({ message: errorMessage(cause) }),
     }),
-    (api) => new Z3BackendImpl(api),
+    (api) => new Z3BackendImpl(api, options),
   );
