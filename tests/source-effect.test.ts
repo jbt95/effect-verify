@@ -254,7 +254,10 @@ const proofPath = fileURLToPath(new URL("./source-effect.test.ts", import.meta.u
 let backend: Z3Backend;
 
 beforeAll(async () => {
-  backend = await Effect.runPromise(makeZ3Backend());
+  // A query that overruns this budget returns `unknown` and fails loudly instead of
+  // stalling: Z3's `check` is synchronous native code, so no JS timer can cut it off.
+  // Every query here finishes far inside 20 s, so the budget is a safety net only.
+  backend = await Effect.runPromise(makeZ3Backend({ timeoutMilliseconds: 20_000 }));
 });
 
 afterAll(async () => {
